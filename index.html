@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14110F">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>:root{padding-top:env(safe-area-inset-top,0px)}</style>
+<title>Шейкер — тренажёр бармена</title>
+<style>
+:root{--bg:#14110F;--card:#1F1A17;--card2:#2A241F;--line:#3A322B;--text:#F4EDE3;--muted:#B8AC9C;--acc:#E8A33D;--accInk:#14110F;--ok:#9BE3A5;--okBg:#1F3A26;--bad:#FFB4A6;--badBg:#4A211B;--heart:#FF8A73}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--text);font:500 16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer}
+#app{max-width:480px;margin:0 auto;min-height:100vh;padding:16px 16px 32px;display:flex;flex-direction:column;gap:16px}
+h1{margin:0;font-size:26px;font-weight:800;line-height:1.2}
+h2{margin:0;font-size:18px;font-weight:800}
+p{margin:0}
+.muted{color:var(--muted)}
+.eyebrow{font-size:13px;font-weight:800;letter-spacing:.06em;color:var(--acc);text-transform:uppercase}
+.card{background:var(--card);border-radius:20px;padding:16px}
+.row{display:flex;align-items:center;gap:12px}
+.grow{flex:1;min-width:0}
+.btn{min-height:52px;border-radius:16px;border:none;background:var(--acc);color:var(--accInk);font-weight:800;font-size:17px;padding:0 18px;width:100%}
+.btn.sec{background:var(--card2);color:var(--text)}
+.icon{width:44px;height:44px;border-radius:22px;border:none;background:var(--card2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.stat{display:flex;align-items:center;gap:6px;font-weight:800;font-size:17px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.opt{min-height:56px;border-radius:16px;border:2px solid var(--line);background:var(--card);font-weight:700;font-size:16px;padding:8px 10px;text-align:center}
+.opt:active{border-color:var(--acc)}
+.opt.wide{grid-column:1/-1;text-align:left;padding:10px 14px}
+.opt .sub{display:block;font-size:13px;font-weight:500;color:var(--muted);margin-top:2px}
+.bar{flex:1;height:14px;border-radius:7px;background:var(--card2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--acc);border-radius:7px;transition:width .25s}
+.tile{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border:none;border-radius:16px;padding:12px 14px;min-height:60px}
+.tile[disabled]{opacity:.45;cursor:default}
+.tile .nm{font-weight:800;font-size:17px}
+.stars{display:flex;gap:2px}
+.msg{border-radius:16px;padding:12px 16px;font-weight:700;min-height:48px;display:flex;align-items:center;background:var(--card);color:var(--muted)}
+.msg.ok{background:var(--okBg);color:var(--ok)}
+.msg.bad{background:var(--badBg);color:var(--bad)}
+.stage{display:flex;align-items:center;gap:14px;min-height:150px}
+.stage svg{flex-shrink:0}
+.steps{margin:0;padding:0 0 0 22px;display:flex;flex-direction:column;gap:6px}
+.chip{display:inline-block;background:var(--card2);border-radius:10px;padding:4px 10px;font-size:14px;font-weight:700;margin:2px 4px 2px 0}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border:none;border-radius:16px;padding:14px 16px;width:100%;text-align:left}
+.sw{width:48px;height:28px;border-radius:14px;background:var(--line);position:relative;flex-shrink:0}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:11px;background:var(--text);transition:left .2s}
+.sw.on{background:var(--acc)}.sw.on::after{left:23px;background:var(--accInk)}
+.foot{font-size:13px;color:var(--muted);text-align:center}
+.shake{animation:sh .3s}
+@keyframes sh{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+'use strict';
+const GLASS = { rocks: 'Рокс (олд фэшн)', highball: 'Хайбол', cocktail: 'Коктейльная (мартини)', flute: 'Флюте', wine: 'Винный бокал', mug: 'Медная кружка', hurricane: 'Харрикейн' };
+const METHOD = {
+  build: ['Билд', 'прямо в бокале со льдом'],
+  stir: ['Стир', 'в смесительном стакане со льдом'],
+  shake: ['Шейк', 'в шейкере со льдом'],
+  muddle: ['Мадл', 'подавить в бокале, потом лёд'],
+  blend: ['Бленд', 'в блендере со льдом']
+};
+const GROUPS = ['Билд: прямо в бокале', 'Шейк', 'Стир и мадл'];
+// Рецепты по спецификациям IBA (iba-world.com). s: [ингредиент, мл или текст] в порядке приготовления
+const D = [
+  { id: 'negroni', n: 'Негрони', grp: 0, g: ['rocks'], m: 'build', gar: ['Половинка дольки апельсина'], s: [['Джин', 30], ['Кампари', 30], ['Красный вермут', 30]] },
+  { id: 'americano', n: 'Американо', grp: 0, g: ['rocks'], m: 'build', gar: ['Полдольки апельсина и лимонная цедра'], s: [['Кампари', 30], ['Красный вермут', 30], ['Содовая', 'сплэш']] },
+  { id: 'cubalibre', n: 'Куба Либре', grp: 0, g: ['highball'], m: 'build', gar: ['Долька лайма'], s: [['Белый ром', 50], ['Кола', 120], ['Сок лайма', 10]] },
+  { id: 'mule', n: 'Московский мул', grp: 0, g: ['mug', 'rocks'], m: 'build', gar: ['Долька лайма'], s: [['Водка', 45], ['Имбирное пиво', 120], ['Сок лайма', 10]], tip: 'Подают в медной кружке или в роксе.' },
+  { id: 'sunrise', n: 'Текила Санрайз', grp: 0, g: ['highball'], m: 'build', gar: ['Половинка дольки апельсина', 'Апельсиновая цедра'], s: [['Текила', 45], ['Апельсиновый сок', 90], ['Гренадин', 15]], tip: 'Гренадин льют последним и не перемешивают: так получается «рассвет».' },
+  { id: 'sotb', n: 'Секс на пляже', grp: 0, g: ['highball'], m: 'build', gar: ['Половинка дольки апельсина'], s: [['Водка', 40], ['Персиковый ликёр', 20], ['Апельсиновый сок', 40], ['Клюквенный сок', 40]] },
+  { id: 'mimosa', n: 'Мимоза', grp: 0, g: ['flute'], m: 'build', gar: ['Апельсиновая цедра', 'Без украшения'], s: [['Апельсиновый сок', 75], ['Просекко', 75]], tip: 'Сначала сок, потом аккуратно игристое. Цедра по желанию.' },
+  { id: 'spritz', n: 'Шприц', grp: 0, g: ['wine'], m: 'build', gar: ['Долька апельсина'], s: [['Просекко', 90], ['Апероль', 60], ['Содовая', 'сплэш']] },
+  { id: 'blackrus', n: 'Чёрный русский', grp: 0, g: ['rocks'], m: 'build', gar: ['Без украшения'], s: [['Водка', 50], ['Кофейный ликёр', 20]], tip: 'Белый русский: сверху добавляют сливки.' },
+  { id: 'liit', n: 'Лонг Айленд', grp: 0, g: ['highball'], m: 'build', gar: ['Долька лимона', 'Без украшения'], s: [['Водка', 15], ['Текила', 15], ['Белый ром', 15], ['Джин', 15], ['Куантро', 15], ['Лимонный сок', 30], ['Сахарный сироп', 20], ['Кола', 'долить']] },
+  { id: 'daiquiri', n: 'Дайкири', grp: 1, g: ['cocktail'], m: 'shake', gar: ['Без украшения'], s: [['Белый ром', 60], ['Сок лайма', 20], ['Сахарная пудра', '2 барные ложки']], tip: 'Сначала размешать, чтобы растворился сахар, потом лёд и шейк.' },
+  { id: 'margarita', n: 'Маргарита', grp: 1, g: ['cocktail'], m: 'shake', gar: ['Соль на половине края', 'Без украшения'], s: [['Текила', 50], ['Трипл сек', 20], ['Сок лайма', 15]], tip: 'Соль на половине края по желанию.' },
+  { id: 'cosmo', n: 'Космополитен', grp: 1, g: ['cocktail'], m: 'shake', gar: ['Лимонная цедра'], s: [['Цитрусовая водка', 40], ['Куантро', 15], ['Сок лайма', 15], ['Клюквенный сок', 30]] },
+  { id: 'wsour', n: 'Виски сауэр', grp: 1, g: ['rocks'], m: 'shake', gar: ['Полдольки апельсина и вишня'], s: [['Бурбон', 45], ['Лимонный сок', 25], ['Сахарный сироп', 20], ['Яичный белок', 20]], tip: 'Белок по желанию. С белком шейкуют сильнее, чтобы была пена. Можно подать в бокале коблер без льда.' },
+  { id: 'sidecar', n: 'Сайдкар', grp: 1, g: ['cocktail'], m: 'shake', gar: ['Без украшения'], s: [['Коньяк', 50], ['Трипл сек', 20], ['Лимонный сок', 20]] },
+  { id: 'espresso', n: 'Эспрессо мартини', grp: 1, g: ['cocktail'], m: 'shake', gar: ['Без украшения'], s: [['Водка', 50], ['Кофейный ликёр', 30], ['Сахарный сироп', 10], ['Эспрессо', '1 шот']] },
+  { id: 'ginfizz', n: 'Джин Физз', grp: 1, g: ['highball'], m: 'shake', gar: ['Долька лимона'], s: [['Джин', 45], ['Лимонный сок', 30], ['Сахарный сироп', 10], ['Содовая', 'сплэш']], tip: 'Шейкуют всё, кроме содовой: её доливают в бокал. Подают без льда.' },
+  { id: 'bramble', n: 'Брамбл', grp: 1, g: ['rocks'], m: 'shake', gar: ['Долька лимона и ежевика'], s: [['Джин', 50], ['Лимонный сок', 25], ['Сахарный сироп', 12.5], ['Ежевичный ликёр', 15]], tip: 'Ежевичный ликёр не шейкуют: его льют последним по кругу поверх дроблёного льда.' },
+  { id: 'pina', n: 'Пина колада', grp: 1, g: ['hurricane'], m: 'blend', gar: ['Долька ананаса и вишня'], s: [['Белый ром', 50], ['Кокосовые сливки', 30], ['Ананасовый сок', 50]] },
+  { id: 'martini', n: 'Драй мартини', grp: 2, g: ['cocktail'], m: 'stir', gar: ['Лимонная цедра', 'Оливки'], s: [['Джин', 60], ['Сухой вермут', 10]], tip: 'Масла цедры выжимают над напитком. Оливки, если гость попросит.' },
+  { id: 'manhattan', n: 'Манхэттен', grp: 2, g: ['cocktail'], m: 'stir', gar: ['Коктейльная вишня'], s: [['Ржаной виски', 50], ['Красный вермут', 20], ['Ангостура', '1 дэш']] },
+  { id: 'oldfash', n: 'Олд фэшн', grp: 2, g: ['rocks'], m: 'muddle', gar: ['Долька апельсина и вишня'], s: [['Сахарный кубик', '1 шт'], ['Ангостура', 'несколько дэшей'], ['Вода', 'несколько капель'], ['Бурбон', 45]], tip: 'Кубик пропитывают биттером, добавляют воду и давят до растворения. Потом лёд и виски.' },
+  { id: 'mojito', n: 'Мохито', grp: 2, g: ['highball'], m: 'muddle', gar: ['Веточка мяты и долька лайма'], s: [['Мята', '6 веточек'], ['Тростниковый сахар', '2 ч. л.'], ['Сок лайма', 20], ['Содовая', 'сплэш'], ['Белый ром', 45], ['Содовая', 'долить']], tip: 'Мяту, сахар и лайм смешивают, добавляют немного содовой и лёд, потом ром и доливают содовую.' },
+  { id: 'caipi', n: 'Кайпиринья', grp: 2, g: ['rocks'], m: 'muddle', gar: ['Без украшения'], s: [['Лайм', '1 шт дольками'], ['Тростниковый сахар', '4 ч. л.'], ['Кашаса', 60]], tip: 'Лайм с сахаром давят прямо в бокале, потом колотый лёд и кашаса.' }
+];
+const EXTRA_ING = ['Сливки', 'Абсент', 'Мараскино', 'Томатный сок', 'Тоник', 'Сок грейпфрута', 'Бенедиктин', 'Тёмный ром'];
+const GARNISH = ['Половинка дольки апельсина', 'Долька апельсина', 'Апельсиновая цедра', 'Лимонная цедра', 'Долька лимона', 'Долька лайма', 'Коктейльная вишня', 'Оливки', 'Веточка мяты и долька лайма', 'Долька ананаса и вишня', 'Долька апельсина и вишня', 'Полдольки апельсина и вишня', 'Долька лимона и ежевика', 'Соль на половине края', 'Без украшения', 'Полдольки апельсина и лимонная цедра', 'Кофейные зёрна', 'Сельдерей'];
+const ML = [5, 10, 12.5, 15, 20, 25, 30, 40, 45, 50, 60, 75, 90, 100, 120, 150];
+const TXT = ['сплэш', 'долить', '1 дэш', 'несколько дэшей', 'несколько капель', '1 шт', '1 шот', '6 веточек', '2 ч. л.', '4 ч. л.', '2 барные ложки', '1 шт дольками'];
+const COLOR = { 'Джин': '#E8E2C8', 'Кампари': '#D3262B', 'Красный вермут': '#7E1B1B', 'Содовая': '#CFE6EF', 'Белый ром': '#EFEADB', 'Кола': '#3B1F12', 'Сок лайма': '#C9E28A', 'Водка': '#E3EAEE', 'Имбирное пиво': '#E6C27A', 'Текила': '#EAD9A0', 'Апельсиновый сок': '#F6A623', 'Гренадин': '#B0102A', 'Персиковый ликёр': '#F3B783', 'Клюквенный сок': '#C2203F', 'Просекко': '#F2E6A6', 'Апероль': '#F26B1D', 'Кофейный ликёр': '#3A2414', 'Куантро': '#F1ECDD', 'Лимонный сок': '#F2EA9A', 'Сахарный сироп': '#F5F1E6', 'Сухой вермут': '#E9E3B8', 'Ржаной виски': '#B5651D', 'Ангостура': '#6B1A12', 'Сахарный кубик': '#FFFFFF', 'Вода': '#DCEBF2', 'Бурбон': '#C0782F', 'Мята': '#5DAA4A', 'Тростниковый сахар': '#E3C79A', 'Лайм': '#8DC63F', 'Кашаса': '#EEE8D5', 'Сахарная пудра': '#FFFFFF', 'Трипл сек': '#F0E9D2', 'Цитрусовая водка': '#EEF0D8', 'Яичный белок': '#F7F5EE', 'Коньяк': '#A9561E', 'Эспрессо': '#2B1A10', 'Ежевичный ликёр': '#4A1033', 'Кокосовые сливки': '#F8F4EA', 'Ананасовый сок': '#F7D44C' };
+const VOL = { 'сплэш': 15, 'долить': 70, '1 дэш': 3, 'несколько дэшей': 4, 'несколько капель': 3, '1 шт': 6, '1 шот': 30, '6 веточек': 8, '2 ч. л.': 6, '4 ч. л.': 8, '2 барные ложки': 6, '1 шт дольками': 14 };
+
+const KEY = 'shaker-v1';
+let S = { adult: false, best: {}, xp: 0, streak: 0, lastDay: '', hints: true };
+try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+let V = { scr: 'home', cid: null };
+let G = null;
+
+const $app = document.getElementById('app');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const amt = a => typeof a === 'number' ? String(a).replace('.', ',') + ' мл' : a;
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const byId = id => D.find(c => c.id === id);
+const dayStr = d => d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+
+function unlocked(grp) {
+  if (grp === 0) return true;
+  const prev = D.filter(c => c.grp === grp - 1);
+  return prev.filter(c => (S.best[c.id] || 0) > 0).length >= Math.ceil(prev.length / 2);
+}
+
+const ICON = {
+  heart: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="#FF8A73"><path d="M12 21s-7.5-4.6-9.6-9.2C1 8.4 3 5 6.4 5c2 0 3.6 1 4.6 2.6h2C14 6 15.6 5 17.6 5 21 5 23.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z"/></svg>',
+  flame: '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="#E8A33D"><path d="M12 2s5 4.5 5 10a5 5 0 0 1-10 0c0-2.3 1.2-4 2.5-5.2.2 1.7 1 2.7 2 3.2C11 7.5 12 2 12 2z"/></svg>',
+  close: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F4EDE3" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  back: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F4EDE3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  lock: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B8AC9C" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  gear: '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F4EDE3" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>'
+};
+function stars(n, size) {
+  size = size || 16; let h = '<span class="stars" aria-label="' + n + ' из 3">';
+  for (let i = 0; i < 3; i++) h += '<svg aria-hidden="true" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="' + (i < n ? '#E8A33D' : '#3A322B') + '"><path d="M12 2l3 6.6 7 .7-5.3 4.7 1.6 7L12 17.3 5.7 21l1.6-7L2 9.3l7-.7z"/></svg>';
+  return h + '</span>';
+}
+
+// Бокалы: контур, область жидкости (top/bottom), ножка
+const SHAPES = {
+  rocks: { p: 'M22 48 L98 48 L94 126 Q93 132 86 132 L34 132 Q27 132 26 126 Z', t: 54, b: 130 },
+  highball: { p: 'M36 12 L84 12 L81 128 Q80 133 75 133 L45 133 Q40 133 39 128 Z', t: 20, b: 131 },
+  cocktail: { p: 'M14 24 L106 24 L60 78 Z', t: 30, b: 78, stem: 'M60 78 L60 124 M40 128 L80 128' },
+  flute: { p: 'M46 10 L74 10 L72 80 Q60 92 48 80 Z', t: 18, b: 88, stem: 'M60 88 L60 124 M44 128 L76 128' },
+  wine: { p: 'M28 20 L92 20 Q96 70 60 82 Q24 70 28 20 Z', t: 34, b: 82, stem: 'M60 82 L60 124 M42 128 L78 128' },
+  mug: { p: 'M26 40 L88 40 L86 130 L28 130 Z', t: 46, b: 130, stem: 'M88 56 Q110 56 108 82 Q106 106 87 106' },
+  hurricane: { p: 'M40 10 L80 10 Q76 40 86 62 Q98 90 76 110 L44 110 Q22 90 34 62 Q44 40 40 10 Z', t: 20, b: 110, stem: 'M60 110 L60 124 M44 128 L76 128' }
+};
+function glassSvg(type, layers, total) {
+  const sh = SHAPES[type]; const H = (sh.b - sh.t) * 0.92; let y = sh.b, rects = '';
+  layers.forEach(l => {
+    const v = typeof l[1] === 'number' ? l[1] : (VOL[l[1]] || 5);
+    const h = Math.max(3, v / total * H);
+    y -= h;
+    rects += '<rect x="0" y="' + y.toFixed(1) + '" width="120" height="' + (h + 0.6).toFixed(1) + '" fill="' + (COLOR[l[0]] || '#CCCCCC') + '"/>';
+  });
+  const cid = 'c' + Math.random().toString(36).slice(2, 7);
+  return '<svg width="110" height="128" viewBox="0 0 120 140" aria-hidden="true"><defs><clipPath id="' + cid + '"><path d="' + sh.p + '"/></clipPath></defs>' +
+    '<path d="' + sh.p + '" fill="#2A241F"/><g clip-path="url(#' + cid + ')">' + rects + '</g>' +
+    '<path d="' + sh.p + '" fill="none" stroke="#E9DFD0" stroke-width="3" stroke-linejoin="round"/>' +
+    (sh.stem ? '<path d="' + sh.stem + '" fill="none" stroke="#E9DFD0" stroke-width="3" stroke-linecap="round"/>' : '') + '</svg>';
+}
+const totalVol = c => c.s.reduce((a, x) => a + (typeof x[1] === 'number' ? x[1] : (VOL[x[1]] || 5)), 0);
+
+// ---------- Игра ----------
+function startGame(id) {
+  const c = byId(id);
+  G = { c: c, step: 'glass', lives: 3, idx: 0, poured: [], glass: null, msg: '', kind: '', opts: [] };
+  makeOpts(); V.scr = 'game'; render();
+}
+function makeOpts() {
+  const c = G.c;
+  if (G.step === 'glass') {
+    const others = shuffle(Object.keys(GLASS).filter(k => c.g.indexOf(k) < 0)).slice(0, 3);
+    G.opts = shuffle([c.g[0]].concat(others)).map(k => ({ v: k, label: GLASS[k] }));
+  } else if (G.step === 'ing') {
+    const rest = []; c.s.slice(G.idx).forEach(x => { if (rest.indexOf(x[0]) < 0) rest.push(x[0]); });
+    const inRecipe = c.s.map(x => x[0]);
+    const pool = shuffle(Object.keys(COLOR).concat(EXTRA_ING).filter(n => inRecipe.indexOf(n) < 0 && n !== 'Вода'));
+    const need = Math.max(2, 6 - rest.length);
+    G.opts = shuffle(rest.concat(pool.slice(0, need))).map(n => ({ v: n, label: n }));
+  } else if (G.step === 'amt') {
+    const a = c.s[G.idx][1]; let list;
+    if (typeof a === 'number') list = ML.filter(x => x !== a).sort((x, y) => Math.abs(x - a) - Math.abs(y - a)).slice(0, 3);
+    else list = shuffle(TXT.filter(x => x !== a)).slice(0, 3);
+    G.opts = shuffle([a].concat(list)).map(x => ({ v: x, label: amt(x) }));
+  } else if (G.step === 'method') {
+    G.opts = Object.keys(METHOD).map(k => ({ v: k, label: METHOD[k][0], sub: METHOD[k][1], wide: true }));
+  } else if (G.step === 'garnish') {
+    const others = shuffle(GARNISH.filter(x => c.gar.indexOf(x) < 0)).slice(0, 3);
+    G.opts = shuffle([c.gar[0]].concat(others)).map(x => ({ v: x, label: x, wide: true }));
+  }
+}
+function wrong(text) {
+  G.lives--; G.msg = text; G.kind = 'bad';
+  if (G.lives <= 0) { G.step = 'fail'; }
+  render(true);
+}
+function right(text, next) {
+  G.msg = text; G.kind = 'ok';
+  if (next) G.step = next;
+  if (G.step === 'done') finish(); else { makeOpts(); render(); }
+}
+function pick(i) {
+  const o = G.opts[i]; if (!o) return; const c = G.c;
+  if (G.step === 'glass') {
+    if (c.g.indexOf(o.v) >= 0) { G.glass = o.v; right('Верно! ' + GLASS[o.v] + '.', 'ing'); }
+    else wrong('Не тот бокал. ' + c.n + ' подают: ' + c.g.map(k => GLASS[k].toLowerCase()).join(' или ') + '.');
+  } else if (G.step === 'ing') {
+    const need = c.s[G.idx];
+    if (o.v === need[0]) { G.step = 'amt'; G.msg = 'Верно, ' + need[0].toLowerCase() + '. Теперь дозировка.'; G.kind = 'ok'; makeOpts(); render(); }
+    else if (c.s.some(x => x[0] === o.v)) wrong(o.v + ' в рецепте есть, но не сейчас. Сейчас по порядку: ' + need[0].toLowerCase() + '.');
+    else wrong('В рецепте ' + c.n + ' нет такого ингредиента: ' + o.v.toLowerCase() + '.');
+  } else if (G.step === 'amt') {
+    const need = c.s[G.idx];
+    if (o.v === need[1]) {
+      G.poured.push(need); G.idx++;
+      right('Верно! ' + need[0] + ': ' + amt(need[1]) + '.', G.idx >= c.s.length ? 'method' : 'ing');
+    } else wrong('Не та дозировка. ' + need[0] + ': ' + amt(need[1]) + '.');
+  } else if (G.step === 'method') {
+    if (o.v === c.m) right('Верно! ' + METHOD[c.m][0] + ': ' + METHOD[c.m][1] + '.', 'garnish');
+    else wrong('Не тот метод. ' + c.n + ': ' + METHOD[c.m][0].toLowerCase() + ', ' + METHOD[c.m][1] + '.');
+  } else if (G.step === 'garnish') {
+    if (c.gar.indexOf(o.v) >= 0) right('Верно! ' + o.v + '.', 'done');
+    else wrong('Не то. Украшение: ' + c.gar.join(' или ').toLowerCase() + '.');
+  }
+}
+function finish() {
+  const c = G.c; const prev = S.best[c.id] || 0;
+  G.newBest = G.lives > prev; G.firstTime = prev === 0;
+  S.best[c.id] = Math.max(prev, G.lives);
+  G.xp = 10 + (G.lives === 3 ? 5 : 0); S.xp += G.xp;
+  const today = dayStr(new Date()); const y = new Date(); y.setDate(y.getDate() - 1);
+  if (S.lastDay !== today) { S.streak = S.lastDay === dayStr(y) ? S.streak + 1 : 1; S.lastDay = today; }
+  save(); render();
+}
+function nextCocktail() {
+  const c = G.c; const i = D.indexOf(c);
+  for (let k = 1; k <= D.length; k++) { const n = D[(i + k) % D.length]; if (unlocked(n.grp) && (S.best[n.id] || 0) < 3) return n.id; }
+  return D[(i + 1) % D.length].id;
+}
+function weakOne() {
+  const list = D.filter(c => unlocked(c.grp) && (S.best[c.id] || 0) < 3);
+  const from = list.length ? list : D.filter(c => unlocked(c.grp));
+  return from[Math.floor(Math.random() * from.length)].id;
+}
+
+// ---------- Экраны ----------
+function header(left) {
+  return '<div class="row">' + left + '<div class="grow"></div><span class="stat">' + ICON.flame + S.streak + '</span><span class="stat" style="color:var(--acc)">' + S.xp + ' XP</span></div>';
+}
+function renderGate() {
+  return '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px">' +
+    '<p class="eyebrow">Тренажёр бармена</p><h1>Шейкер</h1>' +
+    '<p class="muted">Учит рецептуры классических коктейлей: посуда, порядок и дозировки, метод и украшение. Рецепты по спецификациям IBA.</p>' +
+    '<div class="card"><h2>Только для взрослых</h2><p class="muted" style="margin-top:6px">В приложении есть рецепты алкогольных напитков. Оно предназначено для людей старше 18 лет. Чрезмерное употребление алкоголя вредит здоровью.</p></div>' +
+    '<button class="btn" data-act="adult">Мне есть 18 лет</button></div>';
+}
+function renderHome() {
+  let h = header('<h1>Шейкер</h1><button class="icon" data-act="settings" aria-label="Настройки">' + ICON.gear + '</button>');
+  const done = D.filter(c => (S.best[c.id] || 0) > 0).length;
+  h += '<div class="card row"><div class="grow"><p class="muted" style="font-size:14px">Освоено коктейлей</p><p style="font-size:22px;font-weight:800">' + done + ' из ' + D.length + '</p></div><button class="btn" style="width:auto" data-act="weak">Тренировка</button></div>';
+  GROUPS.forEach((g, gi) => {
+    const open = unlocked(gi);
+    h += '<div style="display:flex;flex-direction:column;gap:8px"><p class="eyebrow">' + (gi + 1) + '. ' + esc(g) + '</p>';
+    if (!open) h += '<p class="muted" style="font-size:14px">Откроется, когда пройдёшь половину коктейлей из блока ' + gi + '.</p>';
+    D.filter(c => c.grp === gi).forEach(c => {
+      h += '<button class="tile" data-act="open" data-id="' + c.id + '"' + (open ? '' : ' disabled') + '><span class="grow nm">' + esc(c.n) + '</span>' + (open ? stars(S.best[c.id] || 0) : ICON.lock) + '</button>';
+    });
+    h += '</div>';
+  });
+  h += '<p class="foot">Рецепты по спецификациям IBA · только 18+</p>';
+  return h;
+}
+function recipeCard(c) {
+  let h = '<div class="card" style="display:flex;flex-direction:column;gap:12px"><div class="stage">' + glassSvg(c.g[0], c.s, totalVol(c)) +
+    '<div><p class="muted" style="font-size:14px">Посуда</p><p style="font-weight:800">' + c.g.map(k => GLASS[k]).join(' или ') + '</p>' +
+    '<p class="muted" style="font-size:14px;margin-top:8px">Метод</p><p style="font-weight:800">' + METHOD[c.m][0] + '</p><p class="muted" style="font-size:14px">' + METHOD[c.m][1] + '</p></div></div>';
+  h += '<div><p class="muted" style="font-size:14px;margin-bottom:6px">По порядку</p><ol class="steps">' + c.s.map(x => '<li><b>' + esc(x[0]) + '</b> — ' + esc(amt(x[1])) + '</li>').join('') + '</ol></div>';
+  h += '<div><p class="muted" style="font-size:14px">Украшение</p><p style="font-weight:700">' + esc(c.gar.join(' или ')) + '</p></div>';
+  if (c.tip) h += '<p class="muted" style="font-size:15px">' + esc(c.tip) + '</p>';
+  return h + '</div>';
+}
+function renderStudy() {
+  const c = byId(V.cid);
+  return '<div class="row"><button class="icon" data-act="home" aria-label="Назад">' + ICON.back + '</button><div class="grow"><p class="eyebrow">Рецепт</p><h1>' + esc(c.n) + '</h1></div>' + stars(S.best[c.id] || 0, 20) + '</div>' +
+    recipeCard(c) + '<button class="btn" data-act="play" data-id="' + c.id + '">Собрать коктейль</button>';
+}
+function renderGame() {
+  const c = G.c;
+  const parts = { glass: 0, ing: 1, amt: 1, method: 2, garnish: 3 };
+  const prog = ((parts[G.step] || 0) + (G.step === 'ing' || G.step === 'amt' ? G.idx / c.s.length : 0)) / 4 * 100;
+  let h = '<div class="row"><button class="icon" data-act="quit" aria-label="Выйти">' + ICON.close + '</button><div class="bar"><i style="width:' + prog.toFixed(0) + '%"></i></div><span class="stat" style="color:var(--heart)">' + ICON.heart + G.lives + '</span></div>';
+  const q = { glass: 'Какой бокал подаём?', ing: G.idx === 0 ? 'С чего начинаем?' : 'Что дальше по порядку?', amt: 'Сколько: ' + c.s[G.idx < c.s.length ? G.idx : 0][0].toLowerCase() + '?', method: 'Как готовим?', garnish: 'Чем украшаем?' }[G.step];
+  h += '<div><p class="eyebrow">Собери · ' + esc(c.n) + '</p><h1>' + esc(q) + '</h1></div>';
+  h += '<div class="card stage">' + (G.glass ? glassSvg(G.glass, G.poured, totalVol(c)) + '<div><p class="muted" style="font-size:14px">В бокале</p><p style="font-weight:800">' + GLASS[G.glass] + '</p><p class="muted" style="font-size:14px">' + (G.poured.length ? G.poured.map(x => esc(x[0]) + ' ' + esc(amt(x[1]))).join(' · ') : 'пока пусто') + '</p></div>' :
+    '<p class="muted">Сначала посуда. Потом ингредиенты по порядку с дозировкой, метод и украшение.</p>') + '</div>';
+  h += '<div class="grid">' + G.opts.map((o, i) => '<button class="opt' + (o.wide ? ' wide' : '') + '" data-act="pick" data-i="' + i + '">' + esc(o.label) + (o.sub ? '<span class="sub">' + esc(o.sub) + '</span>' : '') + '</button>').join('') + '</div>';
+  h += '<div class="msg ' + G.kind + '" id="msg" role="status">' + esc(G.msg || (S.hints ? 'Не помнишь? Ошибка покажет правильный ответ.' : 'Выбери вариант.')) + '</div>';
+  return h;
+}
+function renderEnd() {
+  const c = G.c; const ok = G.step === 'done';
+  let h = '<div class="row"><button class="icon" data-act="home" aria-label="К списку">' + ICON.close + '</button><div class="grow"></div>' + (ok ? stars(G.lives, 26) : '') + '</div>';
+  if (ok) h += '<div><p class="eyebrow">+' + G.xp + ' XP · серия ' + S.streak + ' дн.</p><h1>' + esc(c.n) + ' готов!</h1><p class="muted" style="margin-top:6px">' + (G.lives === 3 ? 'Без единой ошибки.' : 'Ошибок: ' + (3 - G.lives) + '. Повтори, чтобы получить три звезды.') + '</p></div>';
+  else h += '<div><p class="eyebrow">Жизни закончились</p><h1>Ничего страшного</h1><p class="muted" style="margin-top:6px">Посмотри рецепт и попробуй ещё раз.</p></div>';
+  h += recipeCard(c);
+  h += ok ? '<button class="btn" data-act="play" data-id="' + nextCocktail() + '">Следующий коктейль</button><button class="btn sec" data-act="play" data-id="' + c.id + '">Собрать ещё раз</button>'
+    : '<button class="btn" data-act="play" data-id="' + c.id + '">Попробовать снова</button><button class="btn sec" data-act="home">К списку</button>';
+  return h;
+}
+function renderSettings() {
+  return '<div class="row"><button class="icon" data-act="home" aria-label="Назад">' + ICON.back + '</button><h1>Настройки</h1></div>' +
+    '<button class="toggle" data-act="hints"><span><b>Подсказки для новичков</b><span class="muted" style="display:block;font-size:14px">Напоминание в игре, что ошибка покажет ответ</span></span><span class="sw' + (S.hints ? ' on' : '') + '"></span></button>' +
+    '<div class="card"><h2>О рецептах</h2><p class="muted" style="margin-top:6px">Рецепты взяты из официального списка Международной ассоциации барменов (IBA). В барах встречаются авторские варианты: тренажёр учит базовой классике.</p></div>' +
+    '<button class="btn sec" data-act="reset">' + (V.confirmReset ? 'Точно сбросить? Нажми ещё раз' : 'Сбросить прогресс') + '</button>' +
+    '<p class="foot">Шейкер · данные хранятся только на этом телефоне</p>';
+}
+function render(shake) {
+  let h;
+  if (!S.adult) h = renderGate();
+  else if (V.scr === 'study') h = renderStudy();
+  else if (V.scr === 'game') h = (G.step === 'done' || G.step === 'fail') ? renderEnd() : renderGame();
+  else if (V.scr === 'settings') h = renderSettings();
+  else h = renderHome();
+  $app.innerHTML = h;
+  if (shake) { const m = document.getElementById('msg'); if (m) { m.classList.add('shake'); } if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) {} }
+  if (!shake && V.scr !== 'game') window.scrollTo(0, 0);
+}
+$app.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
+  const a = b.dataset.act;
+  if (a !== 'reset') V.confirmReset = false;
+  if (a === 'adult') { S.adult = true; save(); render(); }
+  else if (a === 'home' || a === 'quit') { V.scr = 'home'; G = null; render(); }
+  else if (a === 'open') { V.scr = 'study'; V.cid = b.dataset.id; render(); }
+  else if (a === 'play') startGame(b.dataset.id);
+  else if (a === 'weak') startGame(weakOne());
+  else if (a === 'pick') pick(+b.dataset.i);
+  else if (a === 'settings') { V.scr = 'settings'; render(); }
+  else if (a === 'hints') { S.hints = !S.hints; save(); render(); }
+  else if (a === 'reset') {
+    if (!V.confirmReset) { V.confirmReset = true; render(); }
+    else { S.best = {}; S.xp = 0; S.streak = 0; S.lastDay = ''; V.confirmReset = false; save(); V.scr = 'home'; render(); }
+  }
+});
+render();
+if ('serviceWorker' in navigator && !false) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+
+</body>
+</html>

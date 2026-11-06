@@ -1,0 +1,30 @@
+{
+ "id": "./",
+ "name": "Шейкер — тренажёр бармена",
+ "short_name": "Шейкер",
+ "description": "Тренажёр бармена: собери классический коктейль по рецепту IBA — посуда, порядок, дозировки, метод и украшение",
+ "lang": "ru",
+ "start_url": "./",
+ "scope": "./",
+ "orientation": "portrait",
+ "categories": [
+  "education",
+  "food"
+ ],
+ "display": "standalone",
+ "background_color": "#14110F",
+ "theme_color": "#14110F",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any maskable"
+  }
+ ]
+}
