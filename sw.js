@@ -1,7 +1,7 @@
-const C = 'shaker-v3';
+const C = 'shaker-v5';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(C).then(c => Promise.all(FILES.map(f => c.add(f).catch(() => {})))).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(C).then(c => Promise.all(FILES.map(f => c.add(new Request(f, { cache: 'reload' })).catch(() => {})))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('shaker-') && k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -12,7 +12,7 @@ self.addEventListener('fetch', e => {
   const key = req.mode === 'navigate' ? 'index.html' : req;
   e.respondWith(caches.open(C).then(async cache => {
     const hit = await cache.match(key, { ignoreSearch: true });
-    const net = fetch(req).then(res => { if (res && res.ok) cache.put(key, res.clone()).catch(() => {}); return res; });
+    const net = fetch(req, { cache: 'no-cache' }).then(res => { if (res && res.ok) cache.put(key, res.clone()).catch(() => {}); return res; });
     if (hit) { net.catch(() => {}); e.waitUntil(net.catch(() => {})); return hit; }
     return net.catch(() => cache.match('index.html'));
   }));
